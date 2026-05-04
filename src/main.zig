@@ -484,7 +484,6 @@ pub const LedControl = struct {
     // transform png data [][4]u8 to led matrix pixel vector (mat[row][col]pixel) [rows][cols][4]u8 prepared for led strip length
     // NB : image data sent over wire starts top left, we need to set pixels in same order
     pub fn imgbytes2matrix(bytes: []const u8) ![LEDSTRIP_ROWS][LEDSTRIP_COLS][4]u8 {
-        std.debug.print("BOB:\n", .{});
         var reader = std.Io.Reader.fixed(bytes);
         var mat: [LEDSTRIP_ROWS][LEDSTRIP_COLS][4]u8 = undefined;
         var pixel: [4]u8 = undefined; // in littleendian format rgba
@@ -546,7 +545,7 @@ pub fn main(init: std.process.Init) !void {
         var spiConfig = spi.SpiConfig{
             .mode = 0,
             .bits_per_word = 8,
-            .speed = 18000000,
+            .speed = 24000000,
             .delay = 0,
         };
 
