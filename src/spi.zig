@@ -12,6 +12,9 @@ const DisplayError = error{
     SPIDeviceFailInit,
 };
 
+// SPI0 RPI3b+
+// MOSI/DATA GPIO10 (19)
+// SCLK      GPIO11 (23)
 // START SPIDEV wrapper from C -  no longer used!
 // const spiDev = spi_open("/dev/spidev0.0", config);
 pub const SpiConfig = extern struct {
