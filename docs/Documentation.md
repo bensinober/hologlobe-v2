@@ -1,5 +1,8 @@
 # Documentation
 
+Project uses zig 0.16 and spidev and libgpiod2
+
+
 ## build gpiod.zig module from c test
 
     g++ -Wall -Wextra -Werror test.c -lgpiod
@@ -31,50 +34,9 @@ we cannot rely software timing so we need to base sleep on inline assembly
 1MHz = 1000000 clock cycles per second = 1 cycle / us
 800Mhz = 800 000 cycles / ns
 
-## ARMv7 Raspberry PI (or Rock PI)
+## ARMv7 Raspberry PI
 
-
-## Rock PI
-
-
-
-### USE PWM and DMA for stable timing
-
-add missing pwm overlay
-```
-cat <<'EOF' > rockchip-pwm-gpio.dts
-/dts-v1/;
-
-/ {
-        compatible = "rockchip,rk3399";
-
-        fragment@0 {
-                target-path = "/aliases";
-                __overlay__ {
-                        pwm0 = "/pwm@ff420000";
-                        pwm1 = "/pwm@ff420010";
-                };
-        };
-
-        fragment@1 {
-                target-path = "/pwm@ff420000";
-                __overlay__ {
-                        status = "okay";
-                };
-        };
-
-        fragment@2 {
-                target-path = "/pwm@ff420010";
-                __overlay__ {
-                        status = "okay";
-                };
-        };
-
-};
-EOF
-```
-    dtc -O dtb -o rockchip-rk3399-pwm-gpio.dtbo -b 0 -@ rockchip-pwm-gpio.dts
-    sudo cp rockchip-rk3399-pwm-gpio.dtbo /boot/dtb/rockchip/overlay/
+### Option 1: USE PWM and DMA for stable timing
 
 ### DMA
 

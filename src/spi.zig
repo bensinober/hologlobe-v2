@@ -77,7 +77,7 @@ pub const SpiTransfer = struct {
     tx_buf: ?[*]const u8,
     rx_buf: ?[*]u8 = null,
     len: u32,
-    speed_hz: u32 = 8_000_000,
+    speed_hz: u32 = 2_400_000,
     delay_usecs: u16 = 0,
     bits_per_word: u8 = 8,
 };
