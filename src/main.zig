@@ -374,18 +374,23 @@ pub const LedControl = struct {
         try self.mutex.lock(self.io);
         defer self.mutex.unlock(self.io);
         const mat = &self.calibrationMatrix;
-        const half = LEDSTRIP_ROWS / 2; // split rows in two, one for each strip
-        for (0..half) |i| {
+        const quarter = LEDSTRIP_ROWS / 4; // 28 rotation frames, 28 rows per strip
+        for (0..quarter) |i| {
+            const r0 = i; // strip 1 (0 deg): rows 0..27
+            const r1 = 2 * quarter + i; // strip 2 (180 deg): rows 56..83, reversed
+            const r2 = quarter + i; // strip 3 (90 deg): rows 28..55
+            const r3 = 3 * quarter + i; // strip 4 (270 deg): rows 84..111, reversed
             for (0..LEDSTRIP_COLS) |j| {
-                self.setPixelLocked(j, mat.mat[i][j]);
-                const backPixel = mat.mat[i + half][LEDSTRIP_COLS - 1 - j]; // reversed
-                self.setPixelLocked(LEDSTRIP_COLS + j, backPixel);
+                const back = LEDSTRIP_COLS - 1 - j;
+                self.setPixelLocked(0 * LEDSTRIP_COLS + j, mat.mat[r0][j]);
+                self.setPixelLocked(1 * LEDSTRIP_COLS + j, mat.mat[r1][back]);
+                self.setPixelLocked(2 * LEDSTRIP_COLS + j, mat.mat[r2][j]);
+                self.setPixelLocked(3 * LEDSTRIP_COLS + j, mat.mat[r3][back]);
             }
             if (@import("builtin").target.cpu.arch != std.Target.Cpu.Arch.x86_64) {
-                try self.showLocked(); // one write syscall per row
+                try self.showLocked(); // one write syscall per rotation frame
                 //_ = ws2811.ws2811_render(self.ptr); // show row
             }
-            //try self.io.sleep(std.Io.Duration.fromMicroseconds(350), .real); // sleep 350us to balance frame rate of 5Hz
         }
     }
 
