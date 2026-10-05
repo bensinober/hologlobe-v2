@@ -118,6 +118,7 @@ pub const Bus = struct {
     lines: ?*gpiod.struct_gpiod_line_request,
     dcPin: u32,
     rstPin: u32,
+    dcActive: bool = false, // cached DC line state; line starts INACTIVE (0) in init
     //csPin: u32,
 
     pub fn init(allocator: Allocator, config: *SpiConfig, chp: ?*gpiod.struct_gpiod_chip, dcPin: u32, rstPin: u32) !Self {
@@ -199,6 +200,9 @@ pub const Bus = struct {
     }
 
     pub fn dcToggle(self: *Self, hilo: bool) void {
+        // Each toggle is a gpiod ioctl; skip it when the level is unchanged
+        if (self.dcActive == hilo) return;
+        self.dcActive = hilo;
         if (hilo == true) {
             _ = gpiod.gpiod_line_request_set_value(self.lines, self.dcPin, gpiod.GPIOD_LINE_VALUE_ACTIVE);
             // _ = gpiod.gpiod_line_set_value(self.dcPin, 1);

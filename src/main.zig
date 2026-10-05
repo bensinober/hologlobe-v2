@@ -22,6 +22,11 @@ const HALL_PIN = 23; // TODO: add hall sensor
 const LEDSTRIP_COLS = 56; // img width (=length of one frame)
 const LEDSTRIP_ROWS = 112; //img height
 const LEDSTRIP_LENGTH = LEDSTRIP_COLS*4;
+// APA102 wire layout: 4 zero bytes (start frame) + 4 bytes per LED +
+// at least numLEDs/2 bits of 1s (end frame), rounded up to whole bytes
+const FRAME_START_LEN = 4;
+const FRAME_END_LEN = (LEDSTRIP_LENGTH + 15) / 16;
+const FRAME_WIRE_LEN = FRAME_START_LEN + LEDSTRIP_LENGTH * 4 + FRAME_END_LEN;
 //const LEDSTRIP_PIN_A = 18; // GPIO18 (12)
 //const LEDSTRIP_PIN_B = 13; // GPIO13 (33)
 //const LEDSTRIP_PIN = 28; // =18 = GPIO4_D4 = pin 3*8+4 = 28
@@ -215,12 +220,15 @@ pub const LedControl = struct {
     io: std.Io,
     calibrationMatrix: ImageMat,
     imgMatrix: ImageMat,
-    frameBuf: [LEDSTRIP_LENGTH][4]u8,
+    frameBuf: [FRAME_WIRE_LEN]u8,
     allocator: Allocator,
     mutex: std.Io.Mutex,
 
     pub fn init(allocator: Allocator, io: std.Io, sb: *spi.Bus) !Self {
-        const frameBuf: [LEDSTRIP_LENGTH][4]u8 = undefined;
+        var frameBuf: [FRAME_WIRE_LEN]u8 = undefined;
+        @memset(&frameBuf, 0);
+        // End frame is constant 1-bits; LEDs latch their data when they see them
+        @memset(frameBuf[FRAME_START_LEN + LEDSTRIP_LENGTH * 4 ..], 0xff);
         return Self{
             .spiBus = sb,
             .io = io,
@@ -264,24 +272,32 @@ pub const LedControl = struct {
     pub fn setPixel(self: *Self, ledIdx: usize, colour: [4]u8) !void {
         try self.mutex.lock(self.io);
         defer self.mutex.unlock(self.io);
-        self.frameBuf[ledIdx][0] = APA102_START;
-        self.frameBuf[ledIdx][1] = colour[1];
-        self.frameBuf[ledIdx][2] = colour[2];
-        self.frameBuf[ledIdx][3] = colour[3];
-        //std.debug.print("colour: {x}, ledIdx: {d}\n", .{ colour, ledIdx });
+        self.setPixelLocked(ledIdx, colour);
     }
+
+    // setPixel without the mutex; caller must hold the lock
+    fn setPixelLocked(self: *Self, ledIdx: usize, colour: [4]u8) void {
+        const off = FRAME_START_LEN + ledIdx * 4;
+        self.frameBuf[off] = APA102_START;
+        self.frameBuf[off + 1] = colour[1];
+        self.frameBuf[off + 2] = colour[2];
+        self.frameBuf[off + 3] = colour[3];
+        //std.debug.print("colour: {x}, ledIdx: {d}\n", .{ colour, ledIdx });
+     }
 
     ///////  Testing!
     pub fn renderFirstRow(self: *Self) !void {
-        const mat = self.imgMatrix;
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
+        const mat = &self.imgMatrix;
         std.debug.print("row 0: {any}\n", .{mat.mat[0]});
         for (0..LEDSTRIP_COLS) |col| {
             const colour = mat.mat[0][col];
-            try self.setPixel(col, colour);
+            self.setPixelLocked(col, colour);
             std.debug.print("colour: {any}, ledIdx: {d}\n", .{ colour, col });
         }
         if (@import("builtin").target.cpu.arch != std.Target.Cpu.Arch.x86_64) {
-            try self.show();
+            try self.showLocked();
         }
         //try self.io.sleep(std.Io.Duration.fromMicroseconds(350), .real); // sleep 350us to balance frame rate of 5Hz
     }
@@ -296,22 +312,31 @@ pub const LedControl = struct {
         try self.io.sleep(std.Io.Duration.fromMilliseconds(1), .real);
     }
 
-    ///////  Testing!
-    // render img row by row, split in half, reverse second half, as strip is one piece continuing over middle
-    // source image is 60x120 24bit
+    // One render = one rotation: 112/4 = 28 frames. The four 56-led strips sit
+    // at 90-degree spacing (strip 1 at 0, strip 2 at 180, strip 3 at 90, strip 4
+    // at 270) and each renders one quarter of the image, so every row is drawn
+    // exactly once per rotation.
+    // frame i = row i | row 56+i reversed | row 28+i | row 84+i reversed
     pub fn renderImg(self: *Self) !void {
-        const mat = self.imgMatrix;
-        const half = LEDSTRIP_ROWS / 2; // split rows in two, one for each strip
-        for (0..half) |i| {
-            // HERE!
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
+        const mat = &self.imgMatrix;
+        const quarter = LEDSTRIP_ROWS / 4; // 28 rotation frames, 28 rows per strip
+        for (0..quarter) |i| {
+            const r0 = i; // strip 1 (0 deg): rows 0..27
+            const r1 = 2 * quarter + i; // strip 2 (180 deg): rows 56..83, reversed
+            const r2 = quarter + i; // strip 3 (90 deg): rows 28..55
+            const r3 = 3 * quarter + i; // strip 4 (270 deg): rows 84..111, reversed
             for (0..LEDSTRIP_COLS) |j| {
-                try self.setPixel(j, mat.mat[i][j]);
-                const backPixel = mat.mat[i + half][LEDSTRIP_COLS - 1 - j]; // reversed
-                try self.setPixel(LEDSTRIP_COLS + j, backPixel);
+                const back = LEDSTRIP_COLS - 1 - j;
+                self.setPixelLocked(0 * LEDSTRIP_COLS + j, mat.mat[r0][j]);
+                self.setPixelLocked(1 * LEDSTRIP_COLS + j, mat.mat[r1][back]);
+                self.setPixelLocked(2 * LEDSTRIP_COLS + j, mat.mat[r2][j]);
+                self.setPixelLocked(3 * LEDSTRIP_COLS + j, mat.mat[r3][back]);
             }
             if (@import("builtin").target.cpu.arch != std.Target.Cpu.Arch.x86_64) {
-               try self.show();
-               // _ = ws2811.ws2811_render(self.ptr); // show row
+                try self.showLocked(); // one write syscall per rotation frame
+                // _ = ws2811.ws2811_render(self.ptr); // show row
             }
             //try self.io.sleep(std.Io.Duration.fromMicroseconds(350), .real); // sleep 350us to balance frame rate of 5Hz
         }
@@ -346,16 +371,18 @@ pub const LedControl = struct {
     // }
 
     pub fn renderCalibration(self: *Self) !void {
-        const mat = self.calibrationMatrix;
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
+        const mat = &self.calibrationMatrix;
         const half = LEDSTRIP_ROWS / 2; // split rows in two, one for each strip
         for (0..half) |i| {
             for (0..LEDSTRIP_COLS) |j| {
-                try self.setPixel(j, mat.mat[i][j]);
+                self.setPixelLocked(j, mat.mat[i][j]);
                 const backPixel = mat.mat[i + half][LEDSTRIP_COLS - 1 - j]; // reversed
-                try self.setPixel(LEDSTRIP_COLS + j, backPixel);
+                self.setPixelLocked(LEDSTRIP_COLS + j, backPixel);
             }
             if (@import("builtin").target.cpu.arch != std.Target.Cpu.Arch.x86_64) {
-                try self.show();
+                try self.showLocked(); // one write syscall per row
                 //_ = ws2811.ws2811_render(self.ptr); // show row
             }
             //try self.io.sleep(std.Io.Duration.fromMicroseconds(350), .real); // sleep 350us to balance frame rate of 5Hz
@@ -363,13 +390,14 @@ pub const LedControl = struct {
     }
 
     pub fn lightAllLeds(self: *Self, col: [4]u8) !void {
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
         if (@import("builtin").target.cpu.arch != std.Target.Cpu.Arch.x86_64) {
             var i: usize = 0;
             while (i < LEDSTRIP_LENGTH) : (i += 1) {
-                //self.setPixel(i, col);
-                self.frameBuf[i] = col;
+                self.setPixelLocked(i, col);
             }
-            try self.show();
+            try self.showLocked();
         }
     }
 
@@ -418,10 +446,10 @@ pub const LedControl = struct {
         if (@import("builtin").target.cpu.arch != std.Target.Cpu.Arch.x86_64) {
             for (0..LEDSTRIP_LENGTH) |x| {
                 // TODO
-                self.frameBuf[x] = col;
+                try self.setPixel(x, col);
                 try self.show();
                 try self.io.sleep(std.Io.Duration.fromMilliseconds(10), .real);
-                self.frameBuf[x] = [4]u8{APA102_START, 0, 0, 0};
+                try self.setPixel(x, [4]u8{APA102_START, 0, 0, 0});
                 try self.show();
             }
         }
@@ -464,16 +492,18 @@ pub const LedControl = struct {
         }
     }
 
-    // send entire frame
+    // send entire frame as one SPI write (start/leds/end bytes all pre-laid-out in frameBuf)
     pub fn show(self: *Self) !void {
+
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
+        try self.showLocked();
+    }
+
+    // show without the mutex; caller must hold the lock
+    fn showLocked(self: *Self) !void {
         //std.debug.print("FRAME: {any}", .{self.frameBuf});
-        // START FRAME
-        try self.sendData(&[4]u8{0,0,0,0});
-        for (0..LEDSTRIP_LENGTH) |col| {
-            try self.sendData(&self.frameBuf[col]);
-        }
-        // END FRAME
-        try self.sendData(&[4]u8{0xff,0xff,0xff,0xff}); // 1-bits * num_leds/2
+        try self.sendData(&self.frameBuf);
     }
 
 
