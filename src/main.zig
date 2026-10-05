@@ -21,7 +21,7 @@ const time = std.time;
 const HALL_PIN = 23; // TODO: add hall sensor
 const LEDSTRIP_COLS = 56; // img width (=length of one frame)
 const LEDSTRIP_ROWS = 112; //img height
-const LEDSTRIP_LENGTH = LEDSTRIP_COLS*2;
+const LEDSTRIP_LENGTH = LEDSTRIP_COLS*4;
 //const LEDSTRIP_PIN_A = 18; // GPIO18 (12)
 //const LEDSTRIP_PIN_B = 13; // GPIO13 (33)
 //const LEDSTRIP_PIN = 28; // =18 = GPIO4_D4 = pin 3*8+4 = 28
@@ -527,6 +527,7 @@ pub fn main(init: std.process.Init) !void {
     const arch = @import("builtin").target.cpu.arch;
     // Prints to stderr, shortcut based on `std.io.getStdErr()`
     std.debug.print("Testing zig for hologlobe Magic!.\n", .{});
+    std.debug.print("LEDStrip length: {d}.\n", .{LEDSTRIP_LENGTH});
 
     const addr = try getLocalAddress(io, allocator);
     std.debug.print("hologlobe IP addr: {s}\n", .{addr});

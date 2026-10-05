@@ -57,7 +57,7 @@ function setupScene() {
   pivot.position.copy(scene.position)
   scene.add(pivot)
   pivot.add(camera)
-  camera.position.set(0, 0, 1.2)
+  camera.position.set(0, 0, 0)
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
