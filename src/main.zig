@@ -68,6 +68,9 @@ var spiBus: spi.Bus = undefined;
 var ledMode = LEDMode.IDLE;
 var lastLedMode = LEDMode.IDLE;
 
+// delay (in ns) inserted between each full frame draw in ANIMATION mode; set from CLI
+var animateFrameDelayNs: u64 = 0;
+
 pub const Server = struct {
     allocator: Allocator,
     io: std.Io,
@@ -489,6 +492,12 @@ pub const LedControl = struct {
                     var elapsed = start.untilNow(self.io, .awake);
                     const ns = elapsed.toNanoseconds();
                     std.debug.print("ns spent on full render: {}\n", .{ns});
+                    if (animateFrameDelayNs > 0) {
+                        // blank before pausing, otherwise the last row stays lit
+                        // while the frame spins through the pause and smears the image
+                        try self.blank();
+                        try self.io.sleep(std.Io.Duration.fromNanoseconds(animateFrameDelayNs), .real);
+                    }
                 },
                 else => {
                     std.debug.print("UNKNOWN STATE", .{});
@@ -509,6 +518,19 @@ pub const LedControl = struct {
     fn showLocked(self: *Self) !void {
         //std.debug.print("FRAME: {any}", .{self.frameBuf});
         try self.sendData(&self.frameBuf);
+    }
+
+    // send an all-off frame
+    pub fn blank(self: *Self) !void {
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
+        try self.blankLocked();
+    }
+
+    // send an all-off frame; caller must hold the lock
+    fn blankLocked(self: *Self) !void {
+        @memset(self.frameBuf[FRAME_START_LEN .. FRAME_START_LEN + LEDSTRIP_LENGTH * 4], 0);
+        try self.showLocked();
     }
 
 
@@ -558,7 +580,21 @@ pub fn main(init: std.process.Init) !void {
 
     for (args) |arg| {
         std.log.info("Argument: {s}", .{arg});
+        if (std.mem.startsWith(u8, arg, "--frame-delay-ms=")) {
+            const ms = std.fmt.parseInt(u64, arg["--frame-delay-ms=".len..], 10) catch {
+                std.debug.print("invalid --frame-delay-ms value\n", .{});
+                return error.InvalidArgument;
+            };
+            animateFrameDelayNs = ms * std.time.ns_per_ms;
+        } else if (std.mem.startsWith(u8, arg, "--frame-delay-us=")) {
+            const us = std.fmt.parseInt(u64, arg["--frame-delay-us=".len..], 10) catch {
+                std.debug.print("invalid --frame-delay-us value\n", .{});
+                return error.InvalidArgument;
+            };
+            animateFrameDelayNs = us * std.time.ns_per_us;
+        }
     }
+    std.debug.print("ANIMATE frame delay: {} ns\n", .{animateFrameDelayNs});
     const arch = @import("builtin").target.cpu.arch;
     // Prints to stderr, shortcut based on `std.io.getStdErr()`
     std.debug.print("Testing zig for hologlobe Magic!.\n", .{});

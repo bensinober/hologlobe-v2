@@ -6,127 +6,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hologlobe (tm)</title>
     <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 20px;
+        :root {
+            color-scheme: dark;
         }
 
-        .container {
-            display: flex;
-            /* Establishes a flex container */
-            gap: 20px;
-            /* Adds space between the columns */
-        }
-
-        .canvas-area {
-            flex: 1;
-            /* Allows the canvas area to grow and take available space */
-            background-color: #f0f0f0;
-            /* Example background for visualization */
-            padding: 10px;
-            border: 1px solid #ccc;
-        }
-
-        .navButtons {
-            padding: 10px;
-        }
-
-        .navBtn {
-            margin-top: 10px;
-            width: 10em;
-            height: 3em;
-            background-color: green;
-            border-radius: 10px;
-        }
-
-        .navBtn:active {
-            background-color: lightgreen;
-        }
-
-        .controlButtons {
-            flex-shrink: 0;
-            /* Prevents the controls area from shrinking */
-            width: 200px;
-            /* Sets a fixed width for the controls area */
-            background-color: #e0e0e0;
-            /* Example background for visualization */
-            padding: 10px;
-            border: 1px solid #ccc;
-            display: flex;
-            /* Make controls a flex container for vertical button stacking */
-            flex-direction: column;
-            /* Stack buttons vertically */
-            gap: 10px;
-            /* Space between buttons */
-        }
-
-        #canvas-container {
-            border: 1px solid #ccc;
-            display: grid;
-        }
-
-        .pixel {
-            width: 8px;
-            height: 8px;
-            background-color: #000000;
-            border: 1px solid #ddd;
+        *,
+        *::before,
+        *::after {
             box-sizing: border-box;
         }
 
-        .pixel.active {
-            background-color: black;
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+            background:
+                radial-gradient(1100px 500px at 50% -10%, #16264a 0%, rgba(22, 38, 74, 0) 60%),
+                #05070d;
+            color: #dbe6f0;
+            display: flex;
+            justify-content: center;
         }
     </style>
 </head>
 
 <body>
-    <h1>Hologlobe (56x112)</h1>
-    <div class="container">
-        <div class="canvas-area">
-            <div id="canvas-container"></div>
-        </div>
-        <div class="controlButtons">
-            <button id="fullscreen">Fullskjerm</button>
-            <button id="clearCanvasBtn">Tøm</button>
-            <input type="color" id="colorPicker" value="#000000" />
-            <input type="file" id="imageUpload" accept="image/*" />
-            <button id="downloadButton">Last ned PNG</button>
-            <button id="sendButton">Send bilde</button>
-            <div class="navButtons">
-                <button class="navBtn" value="CALIBRATE" id="calibrateMode">CALIBRATE</button>
-                <button class="navBtn" value="DRAW" id="drawMode">DRAW</button>
-                <button class="navBtn" value="ANIMATION" id="animMode">ANIMATION</button>
-                <button class="navBtn" value="RUNONCE" id="runonceMode">RUNONCE</button>
-                <button class="navBtn" value="IDLE" id="idleMode">IDLE</button>
-            </div>
-        </div>
-    </div>
-
-    <script type="module" id="main">
-        import {setGrid, clearCanvas, setMode, download, sendImage, loadPixels, createGrid} from "./script.js";
-        document.addEventListener("DOMContentLoaded", function () {
-            console.log("loaded")
-            // Initial grid creation
-            document.getElementById("clearCanvasBtn").addEventListener("click", clearCanvas)
-            document.getElementById("downloadButton").addEventListener("click", download)
-            document.getElementById("sendButton").addEventListener("click", sendImage)
-            document.getElementById("imageUpload").addEventListener("change", loadPixels)
-            document.getElementById("calibrateMode").addEventListener("click", setMode)
-            document.getElementById("drawMode").addEventListener("click", setMode)
-            document.getElementById("animMode").addEventListener("click", setMode)
-            document.getElementById("runonceMode").addEventListener("click", setMode)
-            document.getElementById("idleMode").addEventListener("click", setMode)
-
-            const width = 56
-            const height = 112
-            const rotate = true
-            setGrid(height, width, rotate)
-            createGrid()
-        })
-    </script>
+    <holo-app rows="112" cols="56"></holo-app>
+    <script type="module" src="/script.js"></script>
 </body>
 
 </html>

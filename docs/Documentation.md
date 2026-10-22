@@ -1,6 +1,7 @@
 # Documentation
 
-Project uses zig 0.16 and spidev and libgpiod2
+Project uses zig 0.16 and spidev for datalines. APA102 led strips rated at max 20-30MHz.
+Since we need to transpose 24bit to individual bits 
 
 
 ## build gpiod.zig module from c test
