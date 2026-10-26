@@ -587,15 +587,15 @@ pub const LedControl = struct {
                 .ANIMATION => {
                     const start = std.Io.Clock.awake.now(self.io);
                     try self.renderImg();
-                    var elapsed = start.untilNow(self.io, .awake);
-                    const ns = elapsed.toNanoseconds();
-                    std.debug.print("ns spent on full render: {}\n", .{ns});
                     if (animateFrameDelayNs > 0) {
                         // blank before pausing, otherwise the last row stays lit
                         // while the frame spins through the pause and smears the image
                         try self.blank();
                         try self.io.sleep(std.Io.Duration.fromNanoseconds(animateFrameDelayNs), .real);
                     }
+                    var elapsed = start.untilNow(self.io, .awake);
+                    const ns = elapsed.toNanoseconds();
+                    std.debug.print("ns spent on full render: {}\n", .{ns});
                 },
                 else => {
                     std.debug.print("UNKNOWN STATE", .{});
